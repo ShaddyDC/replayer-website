@@ -1266,11 +1266,11 @@ function updateGlobalBufferAndViews(buf) {
 }
 
 var STATIC_BASE = 1024,
-    STACK_BASE = 5430528,
+    STACK_BASE = 5430720,
     STACKTOP = STACK_BASE,
-    STACK_MAX = 187648,
-    DYNAMIC_BASE = 5430528,
-    DYNAMICTOP_PTR = 187488;
+    STACK_MAX = 187840,
+    DYNAMIC_BASE = 5430720,
+    DYNAMICTOP_PTR = 187680;
 
 
 
@@ -1717,10 +1717,10 @@ var tempI64;
 // === Body ===
 
 var ASM_CONSTS = {
-  3038: function() {console.log("Mounting IDBFS file system"); FS.mkdir('/data'); FS.mount(IDBFS, { root: '.' }, '/data'); FS.syncfs(true, function (err) { assert(!err); console.log("Finished loading files system!"); Module.ccall('loaded_callback'); });},  
- 3432: function() {console.log("Syncing write"); FS.syncfs(false, function (err) { assert(!err); });},  
- 60808: function($0) {document.getElementById('canvas').style.cursor = AsciiToString($0);},  
- 156877: function($0) {var name = UTF8ToString($0); return typeof process !== 'undefined' && name in process.env ? allocate(intArrayFromString(process.env[name]), 'i8', ALLOC_NORMAL) : 0;}
+  3078: function() {console.log("Mounting IDBFS file system"); FS.mkdir('/data'); FS.mount(IDBFS, { root: '.' }, '/data'); FS.syncfs(true, function (err) { assert(!err); console.log("Finished loading files system!"); Module.ccall('loaded_callback'); });},  
+ 3472: function() {console.log("Syncing write"); FS.syncfs(false, function (err) { assert(!err); });},  
+ 61000: function($0) {document.getElementById('canvas').style.cursor = AsciiToString($0);},  
+ 157069: function($0) {var name = UTF8ToString($0); return typeof process !== 'undefined' && name in process.env ? allocate(intArrayFromString(process.env[name]), 'i8', ALLOC_NORMAL) : 0;}
 };
 
 function _emscripten_asm_const_iii(code, sigPtr, argbuf) {
@@ -1730,7 +1730,7 @@ function _emscripten_asm_const_iii(code, sigPtr, argbuf) {
 
 
 
-// STATICTOP = STATIC_BASE + 186624;
+// STATICTOP = STATIC_BASE + 186816;
 /* global initializers */  __ATINIT__.push({ func: function() { ___wasm_call_ctors() } });
 
 
@@ -6939,7 +6939,7 @@ function _emscripten_asm_const_iii(code, sigPtr, argbuf) {
     }
 
   function _emscripten_get_sbrk_ptr() {
-      return 187488;
+      return 187680;
     }
 
   function _emscripten_memcpy_big(dest, src, num) {
