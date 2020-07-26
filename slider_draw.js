@@ -634,8 +634,8 @@ var wasmMemory;
 // In the wasm backend, we polyfill the WebAssembly object,
 // so this creates a (non-native-wasm) table for us.
 var wasmTable = new WebAssembly.Table({
-  'initial': 565,
-  'maximum': 565 + 0,
+  'initial': 616,
+  'maximum': 616 + 0,
   'element': 'anyfunc'
 });
 
@@ -1266,11 +1266,11 @@ function updateGlobalBufferAndViews(buf) {
 }
 
 var STATIC_BASE = 1024,
-    STACK_BASE = 5430720,
+    STACK_BASE = 5460576,
     STACKTOP = STACK_BASE,
-    STACK_MAX = 187840,
-    DYNAMIC_BASE = 5430720,
-    DYNAMICTOP_PTR = 187680;
+    STACK_MAX = 217696,
+    DYNAMIC_BASE = 5460576,
+    DYNAMICTOP_PTR = 217536;
 
 
 
@@ -1717,10 +1717,10 @@ var tempI64;
 // === Body ===
 
 var ASM_CONSTS = {
-  3078: function() {console.log("Mounting IDBFS file system"); FS.mkdir('/data'); FS.mount(IDBFS, { root: '.' }, '/data'); FS.syncfs(true, function (err) { assert(!err); console.log("Finished loading files system!"); Module.ccall('loaded_callback'); });},  
- 3472: function() {console.log("Syncing write"); FS.syncfs(false, function (err) { assert(!err); });},  
- 61000: function($0) {document.getElementById('canvas').style.cursor = AsciiToString($0);},  
- 157069: function($0) {var name = UTF8ToString($0); return typeof process !== 'undefined' && name in process.env ? allocate(intArrayFromString(process.env[name]), 'i8', ALLOC_NORMAL) : 0;}
+  3246: function() {console.log("Mounting IDBFS file system"); FS.mkdir('/data'); FS.mount(IDBFS, { root: '.' }, '/data'); FS.syncfs(true, function (err) { assert(!err); console.log("Finished loading files system!"); Module.ccall('loaded_callback'); });},  
+ 3640: function() {console.log("Syncing write"); FS.syncfs(false, function (err) { assert(!err); });},  
+ 88936: function($0) {document.getElementById('canvas').style.cursor = AsciiToString($0);},  
+ 185005: function($0) {var name = UTF8ToString($0); return typeof process !== 'undefined' && name in process.env ? allocate(intArrayFromString(process.env[name]), 'i8', ALLOC_NORMAL) : 0;}
 };
 
 function _emscripten_asm_const_iii(code, sigPtr, argbuf) {
@@ -1730,7 +1730,7 @@ function _emscripten_asm_const_iii(code, sigPtr, argbuf) {
 
 
 
-// STATICTOP = STATIC_BASE + 186816;
+// STATICTOP = STATIC_BASE + 216672;
 /* global initializers */  __ATINIT__.push({ func: function() { ___wasm_call_ctors() } });
 
 
@@ -6939,7 +6939,7 @@ function _emscripten_asm_const_iii(code, sigPtr, argbuf) {
     }
 
   function _emscripten_get_sbrk_ptr() {
-      return 187680;
+      return 217536;
     }
 
   function _emscripten_memcpy_big(dest, src, num) {
