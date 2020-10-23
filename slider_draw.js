@@ -1131,9 +1131,9 @@ function updateGlobalBufferAndViews(buf) {
   Module['HEAPF64'] = HEAPF64 = new Float64Array(buf);
 }
 
-var STACK_BASE = 5463456,
+var STACK_BASE = 5463472,
     STACKTOP = STACK_BASE,
-    STACK_MAX = 220576;
+    STACK_MAX = 220592;
 
 
 
@@ -1522,10 +1522,10 @@ var tempI64;
 // === Body ===
 
 var ASM_CONSTS = {
-  3530: function() {console.log("Mounting IDBFS file system"); FS.mkdir('/data'); FS.mount(IDBFS, { root: '.' }, '/data'); FS.syncfs(true, function (err) { assert(!err); console.log("Finished loading files system!"); Module.ccall('loaded_callback'); });},  
- 3924: function() {console.log("Syncing write"); FS.syncfs(false, function (err) { assert(!err); });},  
- 89240: function($0) {document.getElementById('canvas').style.cursor = AsciiToString($0);},  
- 188045: function($0) {var name = UTF8ToString($0); return typeof process !== 'undefined' && name in process.env ? allocate(intArrayFromString(process.env[name]), 'i8', ALLOC_NORMAL) : 0;}
+  3542: function() {console.log("Mounting IDBFS file system"); FS.mkdir('/data'); FS.mount(IDBFS, { root: '.' }, '/data'); FS.syncfs(true, function (err) { assert(!err); console.log("Finished loading files system!"); Module.ccall('loaded_callback'); });},  
+ 3936: function() {console.log("Syncing write"); FS.syncfs(false, function (err) { assert(!err); });},  
+ 89256: function($0) {document.getElementById('canvas').style.cursor = AsciiToString($0);},  
+ 188061: function($0) {var name = UTF8ToString($0); return typeof process !== 'undefined' && name in process.env ? allocate(intArrayFromString(process.env[name]), 'i8', ALLOC_NORMAL) : 0;}
 };
 function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { const response = await fetch(UTF8ToString(url), { headers: { "api-key": UTF8ToString(api_key) }}); const text = await response.text(); return allocate(intArrayFromString(text, false), 'i8', ALLOC_NORMAL); }); }
 
