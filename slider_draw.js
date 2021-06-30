@@ -188,7 +188,7 @@ if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
 // include: web_or_worker_shell_read.js
 
 
-  read_ = function shell_read(url) {
+  read_ = function(url) {
       var xhr = new XMLHttpRequest();
       xhr.open('GET', url, false);
       xhr.send(null);
@@ -196,7 +196,7 @@ if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
   };
 
   if (ENVIRONMENT_IS_WORKER) {
-    readBinary = function readBinary(url) {
+    readBinary = function(url) {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', url, false);
         xhr.responseType = 'arraybuffer';
@@ -205,11 +205,11 @@ if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
     };
   }
 
-  readAsync = function readAsync(url, onload, onerror) {
+  readAsync = function(url, onload, onerror) {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
     xhr.responseType = 'arraybuffer';
-    xhr.onload = function xhr_onload() {
+    xhr.onload = function() {
       if (xhr.status == 200 || (xhr.status == 0 && xhr.response)) { // file URLs can return 0
         onload(xhr.response);
         return;
@@ -247,8 +247,11 @@ moduleOverrides = null;
 // to the proper local x. This has two benefits: first, we only emit it if it is
 // expected to arrive, and second, by using a local everywhere else that can be
 // minified.
+
 if (Module['arguments']) arguments_ = Module['arguments'];
+
 if (Module['thisProgram']) thisProgram = Module['thisProgram'];
+
 if (Module['quit']) quit_ = Module['quit'];
 
 // perform assertions in shell.js after we set up out() and err(), as otherwise if an assertion fails it cannot print the message
@@ -484,8 +487,9 @@ var getTempRet0 = function() {
 // An online HTML version (which may be of a different version of Emscripten)
 //    is up at http://kripken.github.io/emscripten-site/docs/api_reference/preamble.js.html
 
-var wasmBinary;if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
-var noExitRuntime;if (Module['noExitRuntime']) noExitRuntime = Module['noExitRuntime'];
+var wasmBinary;
+if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
+var noExitRuntime = Module['noExitRuntime'] || true;
 
 if (typeof WebAssembly !== 'object') {
   abort('no native wasm support detected');
@@ -505,13 +509,13 @@ function setValue(ptr, value, type, noSafe) {
   type = type || 'i8';
   if (type.charAt(type.length-1) === '*') type = 'i32'; // pointers are 32-bit
     switch(type) {
-      case 'i1': HEAP8[((ptr)>>0)]=value; break;
-      case 'i8': HEAP8[((ptr)>>0)]=value; break;
-      case 'i16': HEAP16[((ptr)>>1)]=value; break;
-      case 'i32': HEAP32[((ptr)>>2)]=value; break;
-      case 'i64': (tempI64 = [value>>>0,(tempDouble=value,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[((ptr)>>2)]=tempI64[0],HEAP32[(((ptr)+(4))>>2)]=tempI64[1]); break;
-      case 'float': HEAPF32[((ptr)>>2)]=value; break;
-      case 'double': HEAPF64[((ptr)>>3)]=value; break;
+      case 'i1': HEAP8[((ptr)>>0)] = value; break;
+      case 'i8': HEAP8[((ptr)>>0)] = value; break;
+      case 'i16': HEAP16[((ptr)>>1)] = value; break;
+      case 'i32': HEAP32[((ptr)>>2)] = value; break;
+      case 'i64': (tempI64 = [value>>>0,(tempDouble=value,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[((ptr)>>2)] = tempI64[0],HEAP32[(((ptr)+(4))>>2)] = tempI64[1]); break;
+      case 'float': HEAPF32[((ptr)>>2)] = value; break;
+      case 'double': HEAPF64[((ptr)>>3)] = value; break;
       default: abort('invalid type for setValue: ' + type);
     }
 }
@@ -551,7 +555,7 @@ var ABORT = false;
 // set by exit() and abort().  Passed to 'onExit' handler.
 // NOTE: This is also used as the process return code code in shell environments
 // but only when noExitRuntime is false.
-var EXITSTATUS = 0;
+var EXITSTATUS;
 
 /** @type {function(*, string=)} */
 function assert(condition, text) {
@@ -877,16 +881,18 @@ function UTF16ToString(ptr, maxBytesToRead) {
   if (endPtr - ptr > 32 && UTF16Decoder) {
     return UTF16Decoder.decode(HEAPU8.subarray(ptr, endPtr));
   } else {
-    var i = 0;
-
     var str = '';
-    while (1) {
+
+    // If maxBytesToRead is not passed explicitly, it will be undefined, and the for-loop's condition
+    // will always evaluate to true. The loop is then terminated on the first null char.
+    for (var i = 0; !(i >= maxBytesToRead / 2); ++i) {
       var codeUnit = HEAP16[(((ptr)+(i*2))>>1)];
-      if (codeUnit == 0 || i == maxBytesToRead / 2) return str;
-      ++i;
+      if (codeUnit == 0) break;
       // fromCharCode constructs a character from a UTF-16 code unit, so we can pass the UTF16 string right through.
       str += String.fromCharCode(codeUnit);
     }
+
+    return str;
   }
 }
 
@@ -913,11 +919,11 @@ function stringToUTF16(str, outPtr, maxBytesToWrite) {
   for (var i = 0; i < numCharsToWrite; ++i) {
     // charCodeAt returns a UTF-16 encoded code unit, so it can be directly written to the HEAP.
     var codeUnit = str.charCodeAt(i); // possibly a lead surrogate
-    HEAP16[((outPtr)>>1)]=codeUnit;
+    HEAP16[((outPtr)>>1)] = codeUnit;
     outPtr += 2;
   }
   // Null-terminate the pointer to the HEAP.
-  HEAP16[((outPtr)>>1)]=0;
+  HEAP16[((outPtr)>>1)] = 0;
   return outPtr - startPtr;
 }
 
@@ -976,12 +982,12 @@ function stringToUTF32(str, outPtr, maxBytesToWrite) {
       var trailSurrogate = str.charCodeAt(++i);
       codeUnit = 0x10000 + ((codeUnit & 0x3FF) << 10) | (trailSurrogate & 0x3FF);
     }
-    HEAP32[((outPtr)>>2)]=codeUnit;
+    HEAP32[((outPtr)>>2)] = codeUnit;
     outPtr += 4;
     if (outPtr + 4 > endPtr) break;
   }
   // Null-terminate the pointer to the HEAP.
-  HEAP32[((outPtr)>>2)]=0;
+  HEAP32[((outPtr)>>2)] = 0;
   return outPtr - startPtr;
 }
 
@@ -1045,17 +1051,14 @@ function writeArrayToMemory(array, buffer) {
 /** @param {boolean=} dontAddNull */
 function writeAsciiToMemory(str, buffer, dontAddNull) {
   for (var i = 0; i < str.length; ++i) {
-    HEAP8[((buffer++)>>0)]=str.charCodeAt(i);
+    HEAP8[((buffer++)>>0)] = str.charCodeAt(i);
   }
   // Null-terminate the pointer to the HEAP.
-  if (!dontAddNull) HEAP8[((buffer)>>0)]=0;
+  if (!dontAddNull) HEAP8[((buffer)>>0)] = 0;
 }
 
 // end include: runtime_strings_extra.js
 // Memory management
-
-var PAGE_SIZE = 16384;
-var WASM_PAGE_SIZE = 65536;
 
 function alignUp(x, multiple) {
   if (x % multiple > 0) {
@@ -1096,42 +1099,9 @@ function updateGlobalBufferAndViews(buf) {
   Module['HEAPF64'] = HEAPF64 = new Float64Array(buf);
 }
 
-var STACK_BASE = 5463744,
-    STACKTOP = STACK_BASE,
-    STACK_MAX = 220864;
-
 var TOTAL_STACK = 5242880;
 
-var INITIAL_INITIAL_MEMORY = Module['INITIAL_MEMORY'] || 16777216;
-
-// In non-standalone/normal mode, we create the memory here.
-// include: runtime_init_memory.js
-
-
-// Create the main memory. (Note: this isn't used in STANDALONE_WASM mode since the wasm
-// memory is created in the wasm, not in JS.)
-
-  if (Module['wasmMemory']) {
-    wasmMemory = Module['wasmMemory'];
-  } else
-  {
-    wasmMemory = new WebAssembly.Memory({
-      'initial': INITIAL_INITIAL_MEMORY / WASM_PAGE_SIZE
-      ,
-      'maximum': INITIAL_INITIAL_MEMORY / WASM_PAGE_SIZE
-    });
-  }
-
-if (wasmMemory) {
-  buffer = wasmMemory.buffer;
-}
-
-// If the user provides an incorrect length, just use that length instead rather than providing the user to
-// specifically provide the memory length with Module['INITIAL_MEMORY'].
-INITIAL_INITIAL_MEMORY = buffer.byteLength;
-updateGlobalBufferAndViews(buffer);
-
-// end include: runtime_init_memory.js
+var INITIAL_MEMORY = Module['INITIAL_MEMORY'] || 16777216;
 
 // include: runtime_init_table.js
 // In regular non-RELOCATABLE mode the table is exported
@@ -1156,6 +1126,8 @@ var __ATPOSTRUN__ = []; // functions called after the main() is called
 
 var runtimeInitialized = false;
 var runtimeExited = false;
+
+__ATINIT__.push({ func: function() { ___wasm_call_ctors() } });
 
 function preRun() {
 
@@ -1336,14 +1308,13 @@ if (!isDataURI(wasmBinaryFile)) {
   wasmBinaryFile = locateFile(wasmBinaryFile);
 }
 
-function getBinary() {
+function getBinary(file) {
   try {
-    if (wasmBinary) {
+    if (file == wasmBinaryFile && wasmBinary) {
       return new Uint8Array(wasmBinary);
     }
-
     if (readBinary) {
-      return readBinary(wasmBinaryFile);
+      return readBinary(file);
     } else {
       throw "both async and sync fetching of the wasm failed";
     }
@@ -1354,23 +1325,36 @@ function getBinary() {
 }
 
 function getBinaryPromise() {
-  // If we don't have the binary yet, and have the Fetch api, use that;
-  // in some environments, like Electron's render process, Fetch api may be present, but have a different context than expected, let's only use it on the Web
-  if (!wasmBinary && (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) && typeof fetch === 'function'
-      // Let's not use fetch to get objects over file:// as it's most likely Cordova which doesn't support fetch for file://
+  // If we don't have the binary yet, try to to load it asynchronously.
+  // Fetch has some additional restrictions over XHR, like it can't be used on a file:// url.
+  // See https://github.com/github/fetch/pull/92#issuecomment-140665932
+  // Cordova or Electron apps are typically loaded from a file:// url.
+  // So use fetch if it is available and the url is not a file, otherwise fall back to XHR.
+  if (!wasmBinary && (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER)) {
+    if (typeof fetch === 'function'
       && !isFileURI(wasmBinaryFile)
-      ) {
-    return fetch(wasmBinaryFile, { credentials: 'same-origin' }).then(function(response) {
-      if (!response['ok']) {
-        throw "failed to load wasm binary file at '" + wasmBinaryFile + "'";
+    ) {
+      return fetch(wasmBinaryFile, { credentials: 'same-origin' }).then(function(response) {
+        if (!response['ok']) {
+          throw "failed to load wasm binary file at '" + wasmBinaryFile + "'";
+        }
+        return response['arrayBuffer']();
+      }).catch(function () {
+          return getBinary(wasmBinaryFile);
+      });
+    }
+    else {
+      if (readAsync) {
+        // fetch is not available or url is file => try XHR (readAsync uses XHR internally)
+        return new Promise(function(resolve, reject) {
+          readAsync(wasmBinaryFile, function(response) { resolve(new Uint8Array(/** @type{!ArrayBuffer} */(response))) }, reject)
+        });
       }
-      return response['arrayBuffer']();
-    }).catch(function () {
-      return getBinary();
-    });
+    }
   }
+    
   // Otherwise, getBinary should be able to get it synchronously
-  return Promise.resolve().then(getBinary);
+  return Promise.resolve().then(function() { return getBinary(wasmBinaryFile); });
 }
 
 // Create the wasm instance.
@@ -1379,7 +1363,7 @@ function createWasm() {
   // prepare imports
   var info = {
     'env': asmLibraryArg,
-    'wasi_snapshot_preview1': asmLibraryArg
+    'wasi_snapshot_preview1': asmLibraryArg,
   };
   // Load the wasm module and create an instance of using native support in the JS engine.
   // handle a generated wasm instance, receiving its exports and
@@ -1391,6 +1375,9 @@ function createWasm() {
     exports = Asyncify.instrumentWasmExports(exports);
 
     Module['asm'] = exports;
+
+    wasmMemory = Module['asm']['memory'];
+    updateGlobalBufferAndViews(wasmMemory.buffer);
 
     wasmTable = Module['asm']['__indirect_function_table'];
 
@@ -1439,6 +1426,7 @@ function createWasm() {
       return instantiateArrayBuffer(receiveInstantiatedSource);
     }
   }
+
   // User shell pages can write their own Module.instantiateWasm = function(imports, successCallback) callback
   // to manually instantiate the Wasm module themselves. This allows pages to run the instantiation parallel
   // to any other async startup actions they are performing.
@@ -1457,19 +1445,19 @@ function createWasm() {
   return {}; // no exports yet; we'll fill them in later
 }
 
-// Globals used by JS i64 conversions
+// Globals used by JS i64 conversions (see makeSetValue)
 var tempDouble;
 var tempI64;
 
 // === Body ===
 
 var ASM_CONSTS = {
-  3546: function() {console.log("Mounting IDBFS file system"); FS.mkdir('/data'); FS.mount(IDBFS, { root: '.' }, '/data'); FS.syncfs(true, function (err) { assert(!err); console.log("Finished loading files system!"); Module.ccall('loaded_callback'); });},  
- 3940: function() {console.log("Syncing write"); FS.syncfs(false, function (err) { assert(!err); });},  
- 89256: function($0) {document.getElementById('canvas').style.cursor = AsciiToString($0);},  
- 188115: function($0) {var name = UTF8ToString($0); return typeof process !== 'undefined' && name in process.env ? allocate(intArrayFromString(process.env[name]), 'i8', ALLOC_NORMAL) : 0;}
+  3550: function() {console.log("Mounting IDBFS file system"); FS.mkdir('/data'); FS.mount(IDBFS, {root: '.'}, '/data'); FS.syncfs( true, function(err) { assert(!err); console.log("Finished loading files system!"); Module.ccall('loaded_callback'); });},  
+ 3940: function() {console.log("Syncing write"); FS.syncfs( false, function(err) { assert(!err); });},  
+ 196280: function($0) {Module['canvas'].style.cursor = AsciiToString($0);},  
+ 295571: function($0) {var name = UTF8ToString($0); if(typeof process !== 'undefined' && name in process.env) { var env = process.env[name]; var bytes = lengthBytesUTF8(env) + 1; var memory = _malloc(bytes); stringToUTF8(env, memory, bytes); return memory; } return 0;}
 };
-function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { const response = await fetch(UTF8ToString(url), { headers: { "api-key": UTF8ToString(api_key) }}); const text = await response.text(); return allocate(intArrayFromString(text, false), 'i8', ALLOC_NORMAL); }); }
+function js_api_request(url,api_key){ return Asyncify.handleAsync(async function() { const response = await fetch(UTF8ToString(url), { headers: { "api-key": UTF8ToString(api_key) } }); const text = await response.text(); return allocate(intArrayFromString(text, false), 'i8', ALLOC_NORMAL); }); }
 
 
 
@@ -1485,9 +1473,9 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         var func = callback.func;
         if (typeof func === 'number') {
           if (callback.arg === undefined) {
-            getDynCaller("v", func)();
+            (function() {  dynCall_v.call(null, func); })();
           } else {
-            getDynCaller("vi", func)(callback.arg);
+            (function(a1) {  dynCall_vi.apply(null, [func, a1]); })(callback.arg);
           }
         } else {
           func(callback.arg === undefined ? null : callback.arg);
@@ -1507,27 +1495,6 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           var y = demangle(x);
           return x === y ? x : (y + ' [' + x + ']');
         });
-    }
-
-  function dynCallLegacy(sig, ptr, args) {
-      if (args && args.length) {
-        return Module['dynCall_' + sig].apply(null, [ptr].concat(args));
-      }
-      return Module['dynCall_' + sig].call(null, ptr);
-    }
-  function dynCall(sig, ptr, args) {
-      return dynCallLegacy(sig, ptr, args);
-    }
-
-  function getDynCaller(sig, ptr) {
-      var argCache = [];
-      return function() {
-        argCache.length = arguments.length;
-        for (var i = 0; i < arguments.length; i++) {
-          argCache[i] = arguments[i];
-        }
-        return dynCall(sig, ptr, argCache);
-      };
     }
 
   function jsStackTrace() {
@@ -1553,11 +1520,6 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       return demangleAll(js);
     }
 
-  function setErrNo(value) {
-      HEAP32[((___errno_location())>>2)]=value;
-      return value;
-    }
-  
   function getRandomDevice() {
       if (typeof crypto === 'object' && typeof crypto['getRandomValues'] === 'function') {
         // for modern web browsers
@@ -1928,15 +1890,9 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         // add the new node to the parent
         if (parent) {
           parent.contents[name] = node;
+          parent.timestamp = node.timestamp;
         }
         return node;
-      },getFileDataAsRegularArray:function(node) {
-        if (node.contents && node.contents.subarray) {
-          var arr = [];
-          for (var i = 0; i < node.usedBytes; ++i) arr.push(node.contents[i]);
-          return arr; // Returns a copy of the original data.
-        }
-        return node.contents; // No-op, the file contents are already in a JS array. Return as-is.
       },getFileDataAsTypedArray:function(node) {
         if (!node.contents) return new Uint8Array(0);
         if (node.contents.subarray) return node.contents.subarray(0, node.usedBytes); // Make sure to not return excess unused bytes.
@@ -1953,28 +1909,19 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         var oldContents = node.contents;
         node.contents = new Uint8Array(newCapacity); // Allocate new storage.
         if (node.usedBytes > 0) node.contents.set(oldContents.subarray(0, node.usedBytes), 0); // Copy old data over to the new storage.
-        return;
       },resizeFileStorage:function(node, newSize) {
         if (node.usedBytes == newSize) return;
         if (newSize == 0) {
           node.contents = null; // Fully decommit when requesting a resize to zero.
           node.usedBytes = 0;
-          return;
-        }
-        if (!node.contents || node.contents.subarray) { // Resize a typed array if that is being used as the backing store.
+        } else {
           var oldContents = node.contents;
           node.contents = new Uint8Array(newSize); // Allocate new storage.
           if (oldContents) {
             node.contents.set(oldContents.subarray(0, Math.min(newSize, node.usedBytes))); // Copy old data over to the new storage.
           }
           node.usedBytes = newSize;
-          return;
         }
-        // Backing with a JS array.
-        if (!node.contents) node.contents = [];
-        if (node.contents.length > newSize) node.contents.length = newSize;
-        else while (node.contents.length < newSize) node.contents.push(0);
-        node.usedBytes = newSize;
       },node_ops:{getattr:function(node) {
           var attr = {};
           // device numbers reuse inode numbers.
@@ -2032,17 +1979,21 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           }
           // do the internal rewiring
           delete old_node.parent.contents[old_node.name];
+          old_node.parent.timestamp = Date.now()
           old_node.name = new_name;
           new_dir.contents[new_name] = old_node;
+          new_dir.timestamp = old_node.parent.timestamp;
           old_node.parent = new_dir;
         },unlink:function(parent, name) {
           delete parent.contents[name];
+          parent.timestamp = Date.now();
         },rmdir:function(parent, name) {
           var node = FS.lookupNode(parent, name);
           for (var i in node.contents) {
             throw new FS.ErrnoError(55);
           }
           delete parent.contents[name];
+          parent.timestamp = Date.now();
         },readdir:function(node) {
           var entries = ['.', '..'];
           for (var key in node.contents) {
@@ -2121,9 +2072,10 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           MEMFS.expandFileStorage(stream.node, offset + length);
           stream.node.usedBytes = Math.max(stream.node.usedBytes, offset + length);
         },mmap:function(stream, address, length, position, prot, flags) {
-          // We don't currently support location hints for the address of the mapping
-          assert(address === 0);
-  
+          if (address !== 0) {
+            // We don't currently support location hints for the address of the mapping
+            throw new FS.ErrnoError(28);
+          }
           if (!FS.isFile(stream.node.mode)) {
             throw new FS.ErrnoError(43);
           }
@@ -2445,10 +2397,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           }
         });
       }};
-  var FS={root:null,mounts:[],devices:{},streams:[],nextInode:1,nameTable:null,currentPath:"/",initialized:false,ignorePermissions:true,trackingDelegate:{},tracking:{openFlags:{READ:1,WRITE:2}},ErrnoError:null,genericErrors:{},filesystems:null,syncFSRequests:0,handleFSError:function(e) {
-        if (!(e instanceof FS.ErrnoError)) throw e + ' : ' + stackTrace();
-        return setErrNo(e.errno);
-      },lookupPath:function(path, opts) {
+  var FS={root:null,mounts:[],devices:{},streams:[],nextInode:1,nameTable:null,currentPath:"/",initialized:false,ignorePermissions:true,trackingDelegate:{},tracking:{openFlags:{READ:1,WRITE:2}},ErrnoError:null,genericErrors:{},filesystems:null,syncFSRequests:0,lookupPath:function(path, opts) {
         path = PATH_FS.resolve(FS.cwd(), path);
         opts = opts || {};
   
@@ -2589,7 +2538,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         return (mode & 61440) === 4096;
       },isSocket:function(mode) {
         return (mode & 49152) === 49152;
-      },flagModes:{"r":0,"rs":1052672,"r+":2,"w":577,"wx":705,"xw":705,"w+":578,"wx+":706,"xw+":706,"a":1089,"ax":1217,"xa":1217,"a+":1090,"ax+":1218,"xa+":1218},modeStringToFlags:function(str) {
+      },flagModes:{"r":0,"r+":2,"w":577,"w+":578,"a":1089,"a+":1090},modeStringToFlags:function(str) {
         var flags = FS.flagModes[str];
         if (typeof flags === 'undefined') {
           throw new Error('Unknown file open mode: ' + str);
@@ -3436,7 +3385,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         return stream.stream_ops.ioctl(stream, cmd, arg);
       },readFile:function(path, opts) {
         opts = opts || {};
-        opts.flags = opts.flags || 'r';
+        opts.flags = opts.flags || 0;
         opts.encoding = opts.encoding || 'binary';
         if (opts.encoding !== 'utf8' && opts.encoding !== 'binary') {
           throw new Error('Invalid encoding type "' + opts.encoding + '"');
@@ -3456,7 +3405,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         return ret;
       },writeFile:function(path, data, opts) {
         opts = opts || {};
-        opts.flags = opts.flags || 'w';
+        opts.flags = opts.flags || 577;
         var stream = FS.open(path, opts.flags, opts.mode);
         if (typeof data === 'string') {
           var buf = new Uint8Array(lengthBytesUTF8(data)+1);
@@ -3497,7 +3446,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         });
         FS.mkdev('/dev/null', FS.makedev(1, 3));
         // setup /dev/tty and /dev/tty1
-        // stderr needs to print output using Module['printErr']
+        // stderr needs to print output using err() rather than out()
         // so we register a second tty just for it.
         TTY.register(FS.makedev(5, 0), TTY.default_tty_ops);
         TTY.register(FS.makedev(6, 0), TTY.default_tty1_ops);
@@ -3512,13 +3461,14 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         FS.mkdir('/dev/shm');
         FS.mkdir('/dev/shm/tmp');
       },createSpecialDirectories:function() {
-        // create /proc/self/fd which allows /proc/self/fd/6 => readlink gives the name of the stream for fd 6 (see test_unistd_ttyname)
+        // create /proc/self/fd which allows /proc/self/fd/6 => readlink gives the
+        // name of the stream for fd 6 (see test_unistd_ttyname)
         FS.mkdir('/proc');
-        FS.mkdir('/proc/self');
+        var proc_self = FS.mkdir('/proc/self');
         FS.mkdir('/proc/self/fd');
         FS.mount({
           mount: function() {
-            var node = FS.createNode('/proc/self', 'fd', 16384 | 511 /* 0777 */, 73);
+            var node = FS.createNode(proc_self, 'fd', 16384 | 511 /* 0777 */, 73);
             node.node_ops = {
               lookup: function(parent, name) {
                 var fd = +name;
@@ -3562,9 +3512,9 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
   
         // open default streams for the stdin, stdout and stderr devices
-        var stdin = FS.open('/dev/stdin', 'r');
-        var stdout = FS.open('/dev/stdout', 'w');
-        var stderr = FS.open('/dev/stderr', 'w');
+        var stdin = FS.open('/dev/stdin', 0);
+        var stdout = FS.open('/dev/stdout', 1);
+        var stderr = FS.open('/dev/stderr', 1);
       },ensureErrnoError:function() {
         if (FS.ErrnoError) return;
         FS.ErrnoError = /** @this{Object} */ function ErrnoError(errno, node) {
@@ -3632,7 +3582,6 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         if (ret.exists) {
           return ret.object;
         } else {
-          setErrNo(ret.error);
           return null;
         }
       },analyzePath:function(path, dontResolveLastLink) {
@@ -3693,7 +3642,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           }
           // make sure we can write to the file
           FS.chmod(node, mode | 146);
-          var stream = FS.open(node, 'w');
+          var stream = FS.open(node, 577);
           FS.write(stream, data, 0, data.length, 0, canOwn);
           FS.close(stream);
           FS.chmod(node, mode);
@@ -3754,7 +3703,6 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         return FS.mkdev(path, mode, dev);
       },forceLoadFile:function(obj) {
         if (obj.isDevice || obj.isFolder || obj.link || obj.contents) return true;
-        var success = true;
         if (typeof XMLHttpRequest !== 'undefined') {
           throw new Error("Lazy loading should have been performed (contents set) in createLazyFile, but it was not. Lazy loading only works in web workers. Use --embed-file or --preload-file in emcc on the main thread.");
         } else if (read_) {
@@ -3765,13 +3713,11 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
             obj.contents = intArrayFromString(read_(obj.url), true);
             obj.usedBytes = obj.contents.length;
           } catch (e) {
-            success = false;
+            throw new FS.ErrnoError(29);
           }
         } else {
           throw new Error('Cannot load without read() or XMLHttpRequest.');
         }
-        if (!success) setErrNo(29);
-        return success;
       },createLazyFile:function(parent, name, url, canRead, canWrite) {
         // Lazy chunked Uint8Array (implements get and length from Uint8Array). Actual getting is abstracted away for eventual reuse.
         /** @constructor */
@@ -3902,17 +3848,13 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         keys.forEach(function(key) {
           var fn = node.stream_ops[key];
           stream_ops[key] = function forceLoadLazyFile() {
-            if (!FS.forceLoadFile(node)) {
-              throw new FS.ErrnoError(29);
-            }
+            FS.forceLoadFile(node);
             return fn.apply(null, arguments);
           };
         });
         // use a custom read function
         stream_ops.read = function stream_ops_read(stream, buffer, offset, length, position) {
-          if (!FS.forceLoadFile(node)) {
-            throw new FS.ErrnoError(29);
-          }
+          FS.forceLoadFile(node);
           var contents = stream.node.contents;
           if (position >= contents.length)
             return 0;
@@ -4179,14 +4121,16 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
     }
   var Browser={mainLoop:{scheduler:null,method:"",currentlyRunningMainloop:0,func:null,arg:0,timingMode:0,timingValue:0,currentFrameNumber:0,queue:[],pause:function() {
           Browser.mainLoop.scheduler = null;
-          Browser.mainLoop.currentlyRunningMainloop++; // Incrementing this signals the previous main loop that it's now become old, and it must return.
+          // Incrementing this signals the previous main loop that it's now become old, and it must return.
+          Browser.mainLoop.currentlyRunningMainloop++;
         },resume:function() {
           Browser.mainLoop.currentlyRunningMainloop++;
           var timingMode = Browser.mainLoop.timingMode;
           var timingValue = Browser.mainLoop.timingValue;
           var func = Browser.mainLoop.func;
           Browser.mainLoop.func = null;
-          setMainLoop(func, 0, false, Browser.mainLoop.arg, true /* do not set timing and call scheduler, we will do it on the next lines */);
+          // do not set timing and call scheduler, we will do it on the next lines
+          setMainLoop(func, 0, false, Browser.mainLoop.arg, true);
           _emscripten_set_main_loop_timing(timingMode, timingValue);
           Browser.mainLoop.scheduler();
         },updateStatus:function() {
@@ -4539,47 +4483,16 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
         var RAF = Browser.fakeRequestAnimationFrame;
         RAF(func);
-      },safeCallback:function(func) {
-        return function() {
-          if (!ABORT) return func.apply(null, arguments);
-        };
-      },allowAsyncCallbacks:true,queuedAsyncCallbacks:[],pauseAsyncCallbacks:function() {
-        Browser.allowAsyncCallbacks = false;
-      },resumeAsyncCallbacks:function() { // marks future callbacks as ok to execute, and synchronously runs any remaining ones right now
-        Browser.allowAsyncCallbacks = true;
-        if (Browser.queuedAsyncCallbacks.length > 0) {
-          var callbacks = Browser.queuedAsyncCallbacks;
-          Browser.queuedAsyncCallbacks = [];
-          callbacks.forEach(function(func) {
-            func();
-          });
-        }
       },safeRequestAnimationFrame:function(func) {
         return Browser.requestAnimationFrame(function() {
           if (ABORT) return;
-          if (Browser.allowAsyncCallbacks) {
-            func();
-          } else {
-            Browser.queuedAsyncCallbacks.push(func);
-          }
+          func();
         });
       },safeSetTimeout:function(func, timeout) {
         noExitRuntime = true;
         return setTimeout(function() {
           if (ABORT) return;
-          if (Browser.allowAsyncCallbacks) {
-            func();
-          } else {
-            Browser.queuedAsyncCallbacks.push(func);
-          }
-        }, timeout);
-      },safeSetInterval:function(func, timeout) {
-        noExitRuntime = true;
-        return setInterval(function() {
-          if (ABORT) return;
-          if (Browser.allowAsyncCallbacks) {
-            func();
-          } // drop it on the floor otherwise, next interval will kick in
+          func();
         }, timeout);
       },getMimetype:function(name) {
         return {
@@ -4745,7 +4658,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         if (typeof SDL != "undefined") {
           var flags = HEAPU32[((SDL.screen)>>2)];
           flags = flags | 0x00800000; // set SDL_FULLSCREEN flag
-          HEAP32[((SDL.screen)>>2)]=flags
+          HEAP32[((SDL.screen)>>2)] = flags
         }
         Browser.updateCanvasDimensions(Module['canvas']);
         Browser.updateResizeListeners();
@@ -4754,7 +4667,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         if (typeof SDL != "undefined") {
           var flags = HEAPU32[((SDL.screen)>>2)];
           flags = flags & ~0x00800000; // clear SDL_FULLSCREEN flag
-          HEAP32[((SDL.screen)>>2)]=flags
+          HEAP32[((SDL.screen)>>2)] = flags
         }
         Browser.updateCanvasDimensions(Module['canvas']);
         Browser.updateResizeListeners();
@@ -4820,14 +4733,14 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
   
       if (!surfData.buffer) {
         surfData.buffer = _malloc(surfData.width * surfData.height * 4);
-        HEAP32[(((surf)+(20))>>2)]=surfData.buffer;
+        HEAP32[(((surf)+(20))>>2)] = surfData.buffer;
       }
   
       // Mark in C/C++-accessible SDL structure
       // SDL_Surface has the following fields: Uint32 flags, SDL_PixelFormat *format; int w, h; Uint16 pitch; void *pixels; ...
       // So we have fields all of the same size, and 5 of them before us.
       // TODO: Use macros like in library.js
-      HEAP32[(((surf)+(20))>>2)]=surfData.buffer;
+      HEAP32[(((surf)+(20))>>2)] = surfData.buffer;
   
       if (surf == SDL.screen && Module.screenIsReadOnly && surfData.image) return 0;
   
@@ -4868,7 +4781,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           //     surfData.image.data[i*4 +2],
           //     255);
           //   var index = surfData.colorMap[color];
-          //   HEAP8[(((surfData.buffer)+(i))>>0)]=index;
+          //   HEAP8[(((surfData.buffer)+(i))>>0)] = index;
           // }
           throw 'CopyOnLock is not supported for SDL_LockSurface with SDL_HWPALETTE flag set' + new Error().stack;
         } else {
@@ -4895,10 +4808,10 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           h: HEAP32[((rect + 12)>>2)]
         };
       },updateRect:function(rect, r) {
-        HEAP32[((rect)>>2)]=r.x;
-        HEAP32[(((rect)+(4))>>2)]=r.y;
-        HEAP32[(((rect)+(8))>>2)]=r.w;
-        HEAP32[(((rect)+(12))>>2)]=r.h;
+        HEAP32[((rect)>>2)] = r.x;
+        HEAP32[(((rect)+(4))>>2)] = r.y;
+        HEAP32[(((rect)+(8))>>2)] = r.w;
+        HEAP32[(((rect)+(12))>>2)] = r.h;
       },intersectionOfRects:function(first, second) {
         var leftX = Math.max(first.x, second.x);
         var leftY = Math.max(first.y, second.y);
@@ -4942,30 +4855,30 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           buffer = _malloc(width * height * 4);
         }
   
-        HEAP32[((surf)>>2)]=flags;
-        HEAP32[(((surf)+(4))>>2)]=pixelFormat;
-        HEAP32[(((surf)+(8))>>2)]=width;
-        HEAP32[(((surf)+(12))>>2)]=height;
-        HEAP32[(((surf)+(16))>>2)]=width * bpp;  // assuming RGBA or indexed for now,
+        HEAP32[((surf)>>2)] = flags;
+        HEAP32[(((surf)+(4))>>2)] = pixelFormat;
+        HEAP32[(((surf)+(8))>>2)] = width;
+        HEAP32[(((surf)+(12))>>2)] = height;
+        HEAP32[(((surf)+(16))>>2)] = width * bpp;  // assuming RGBA or indexed for now,
                                                                                           // since that is what ImageData gives us in browsers
-        HEAP32[(((surf)+(20))>>2)]=buffer;
+        HEAP32[(((surf)+(20))>>2)] = buffer;
   
-        HEAP32[(((surf)+(36))>>2)]=0;
-        HEAP32[(((surf)+(40))>>2)]=0;
-        HEAP32[(((surf)+(44))>>2)]=Module["canvas"].width;
-        HEAP32[(((surf)+(48))>>2)]=Module["canvas"].height;
+        HEAP32[(((surf)+(36))>>2)] = 0;
+        HEAP32[(((surf)+(40))>>2)] = 0;
+        HEAP32[(((surf)+(44))>>2)] = Module["canvas"].width;
+        HEAP32[(((surf)+(48))>>2)] = Module["canvas"].height;
   
-        HEAP32[(((surf)+(56))>>2)]=1;
+        HEAP32[(((surf)+(56))>>2)] = 1;
   
-        HEAP32[((pixelFormat)>>2)]=-2042224636;
-        HEAP32[(((pixelFormat)+(4))>>2)]=0;// TODO
-        HEAP8[(((pixelFormat)+(8))>>0)]=bpp * 8;
-        HEAP8[(((pixelFormat)+(9))>>0)]=bpp;
+        HEAP32[((pixelFormat)>>2)] = -2042224636;
+        HEAP32[(((pixelFormat)+(4))>>2)] = 0;// TODO
+        HEAP8[(((pixelFormat)+(8))>>0)] = bpp * 8;
+        HEAP8[(((pixelFormat)+(9))>>0)] = bpp;
   
-        HEAP32[(((pixelFormat)+(12))>>2)]=rmask || 0x000000ff;
-        HEAP32[(((pixelFormat)+(16))>>2)]=gmask || 0x0000ff00;
-        HEAP32[(((pixelFormat)+(20))>>2)]=bmask || 0x00ff0000;
-        HEAP32[(((pixelFormat)+(24))>>2)]=amask || 0xff000000;
+        HEAP32[(((pixelFormat)+(12))>>2)] = rmask || 0x000000ff;
+        HEAP32[(((pixelFormat)+(16))>>2)] = gmask || 0x0000ff00;
+        HEAP32[(((pixelFormat)+(20))>>2)] = bmask || 0x00ff0000;
+        HEAP32[(((pixelFormat)+(24))>>2)] = amask || 0xff000000;
   
         // Decide if we want to use WebGL or not
         SDL.GL = SDL.GL || is_SDL_OPENGL;
@@ -5045,7 +4958,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         var refcountPointer = surf + 56;
         var refcount = HEAP32[((refcountPointer)>>2)];
         if (refcount > 1) {
-          HEAP32[((refcountPointer)>>2)]=refcount - 1;
+          HEAP32[((refcountPointer)>>2)] = refcount - 1;
           return;
         }
   
@@ -5388,7 +5301,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
             var code = SDL.lookupKeyCodeForEvent(event);
             // Assigning a boolean to HEAP8, that's alright but Closure would like to warn about it:
             /** @suppress{checkTypes} */
-            HEAP8[(((SDL.keyboardState)+(code))>>0)]=down;
+            HEAP8[(((SDL.keyboardState)+(code))>>0)] = down;
             // TODO: lmeta, rmeta, numlock, capslock, KMOD_MODE, KMOD_RESERVED
             SDL.modState = (HEAP8[(((SDL.keyboardState)+(1248))>>0)] ? 0x0040 : 0) | // KMOD_LCTRL
               (HEAP8[(((SDL.keyboardState)+(1249))>>0)] ? 0x0001 : 0) | // KMOD_LSHIFT
@@ -5423,7 +5336,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         if (!SDL.eventHandler) return;
   
         while (SDL.pollEvent(SDL.eventHandlerTemp)) {
-          getDynCaller("iii", SDL.eventHandler)(SDL.eventHandlerContext, SDL.eventHandlerTemp);
+          (function(a1, a2) { return dynCall_iii.apply(null, [SDL.eventHandler, a1, a2]); })(SDL.eventHandlerContext, SDL.eventHandlerTemp);
         }
       },pollEvent:function(ptr) {
         if (SDL.initFlags & 0x200 && SDL.joystickEventState) {
@@ -5462,54 +5375,54 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
               scan = SDL.scanCodes[key] || key;
             }
   
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-            HEAP8[(((ptr)+(8))>>0)]=down ? 1 : 0;
-            HEAP8[(((ptr)+(9))>>0)]=0; // TODO
-            HEAP32[(((ptr)+(12))>>2)]=scan;
-            HEAP32[(((ptr)+(16))>>2)]=key;
-            HEAP16[(((ptr)+(20))>>1)]=SDL.modState;
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+            HEAP8[(((ptr)+(8))>>0)] = down ? 1 : 0;
+            HEAP8[(((ptr)+(9))>>0)] = 0; // TODO
+            HEAP32[(((ptr)+(12))>>2)] = scan;
+            HEAP32[(((ptr)+(16))>>2)] = key;
+            HEAP16[(((ptr)+(20))>>1)] = SDL.modState;
             // some non-character keys (e.g. backspace and tab) won't have keypressCharCode set, fill in with the keyCode.
-            HEAP32[(((ptr)+(24))>>2)]=event.keypressCharCode || key;
+            HEAP32[(((ptr)+(24))>>2)] = event.keypressCharCode || key;
   
             break;
           }
           case 'keypress': {
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
             // Not filling in windowID for now
             var cStr = intArrayFromString(String.fromCharCode(event.charCode));
             for (var i = 0; i < cStr.length; ++i) {
-              HEAP8[(((ptr)+(8 + i))>>0)]=cStr[i];
+              HEAP8[(((ptr)+(8 + i))>>0)] = cStr[i];
             }
             break;
           }
           case 'mousedown': case 'mouseup': case 'mousemove': {
             if (event.type != 'mousemove') {
               var down = event.type === 'mousedown';
-              HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-              HEAP32[(((ptr)+(4))>>2)]=0;
-              HEAP32[(((ptr)+(8))>>2)]=0;
-              HEAP32[(((ptr)+(12))>>2)]=0;
-              HEAP8[(((ptr)+(16))>>0)]=event.button+1; // DOM buttons are 0-2, SDL 1-3
-              HEAP8[(((ptr)+(17))>>0)]=down ? 1 : 0;
-              HEAP32[(((ptr)+(20))>>2)]=Browser.mouseX;
-              HEAP32[(((ptr)+(24))>>2)]=Browser.mouseY;
+              HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+              HEAP32[(((ptr)+(4))>>2)] = 0;
+              HEAP32[(((ptr)+(8))>>2)] = 0;
+              HEAP32[(((ptr)+(12))>>2)] = 0;
+              HEAP8[(((ptr)+(16))>>0)] = event.button+1; // DOM buttons are 0-2, SDL 1-3
+              HEAP8[(((ptr)+(17))>>0)] = down ? 1 : 0;
+              HEAP32[(((ptr)+(20))>>2)] = Browser.mouseX;
+              HEAP32[(((ptr)+(24))>>2)] = Browser.mouseY;
             } else {
-              HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-              HEAP32[(((ptr)+(4))>>2)]=0;
-              HEAP32[(((ptr)+(8))>>2)]=0;
-              HEAP32[(((ptr)+(12))>>2)]=0;
-              HEAP32[(((ptr)+(16))>>2)]=SDL.buttonState;
-              HEAP32[(((ptr)+(20))>>2)]=Browser.mouseX;
-              HEAP32[(((ptr)+(24))>>2)]=Browser.mouseY;
-              HEAP32[(((ptr)+(28))>>2)]=Browser.mouseMovementX;
-              HEAP32[(((ptr)+(32))>>2)]=Browser.mouseMovementY;
+              HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+              HEAP32[(((ptr)+(4))>>2)] = 0;
+              HEAP32[(((ptr)+(8))>>2)] = 0;
+              HEAP32[(((ptr)+(12))>>2)] = 0;
+              HEAP32[(((ptr)+(16))>>2)] = SDL.buttonState;
+              HEAP32[(((ptr)+(20))>>2)] = Browser.mouseX;
+              HEAP32[(((ptr)+(24))>>2)] = Browser.mouseY;
+              HEAP32[(((ptr)+(28))>>2)] = Browser.mouseMovementX;
+              HEAP32[(((ptr)+(32))>>2)] = Browser.mouseMovementY;
             }
             break;
           }
           case 'wheel': {
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-            HEAP32[(((ptr)+(16))>>2)]=event.deltaX;
-            HEAP32[(((ptr)+(20))>>2)]=event.deltaY;
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+            HEAP32[(((ptr)+(16))>>2)] = event.deltaX;
+            HEAP32[(((ptr)+(20))>>2)] = event.deltaY;
             break;
           }
           case 'touchstart': case 'touchend': case 'touchmove': {
@@ -5525,67 +5438,67 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
             var dy = y - ly;
             if (touch['deviceID'] === undefined) touch.deviceID = SDL.TOUCH_DEFAULT_ID;
             if (dx === 0 && dy === 0 && event.type === 'touchmove') return false; // don't send these if nothing happened
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-            HEAP32[(((ptr)+(4))>>2)]=_SDL_GetTicks();
-            (tempI64 = [touch.deviceID>>>0,(tempDouble=touch.deviceID,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[(((ptr)+(8))>>2)]=tempI64[0],HEAP32[(((ptr)+(12))>>2)]=tempI64[1]);
-            (tempI64 = [touch.identifier>>>0,(tempDouble=touch.identifier,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[(((ptr)+(16))>>2)]=tempI64[0],HEAP32[(((ptr)+(20))>>2)]=tempI64[1]);
-            HEAPF32[(((ptr)+(24))>>2)]=x;
-            HEAPF32[(((ptr)+(28))>>2)]=y;
-            HEAPF32[(((ptr)+(32))>>2)]=dx;
-            HEAPF32[(((ptr)+(36))>>2)]=dy;
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+            HEAP32[(((ptr)+(4))>>2)] = _SDL_GetTicks();
+            (tempI64 = [touch.deviceID>>>0,(tempDouble=touch.deviceID,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[(((ptr)+(8))>>2)] = tempI64[0],HEAP32[(((ptr)+(12))>>2)] = tempI64[1]);
+            (tempI64 = [touch.identifier>>>0,(tempDouble=touch.identifier,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[(((ptr)+(16))>>2)] = tempI64[0],HEAP32[(((ptr)+(20))>>2)] = tempI64[1]);
+            HEAPF32[(((ptr)+(24))>>2)] = x;
+            HEAPF32[(((ptr)+(28))>>2)] = y;
+            HEAPF32[(((ptr)+(32))>>2)] = dx;
+            HEAPF32[(((ptr)+(36))>>2)] = dy;
             if (touch.force !== undefined) {
-              HEAPF32[(((ptr)+(40))>>2)]=touch.force;
+              HEAPF32[(((ptr)+(40))>>2)] = touch.force;
             } else { // No pressure data, send a digital 0/1 pressure.
-              HEAPF32[(((ptr)+(40))>>2)]=event.type == "touchend" ? 0 : 1;
+              HEAPF32[(((ptr)+(40))>>2)] = event.type == "touchend" ? 0 : 1;
             }
             break;
           }
           case 'unload': {
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
             break;
           }
           case 'resize': {
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-            HEAP32[(((ptr)+(4))>>2)]=event.w;
-            HEAP32[(((ptr)+(8))>>2)]=event.h;
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+            HEAP32[(((ptr)+(4))>>2)] = event.w;
+            HEAP32[(((ptr)+(8))>>2)] = event.h;
             break;
           }
           case 'joystick_button_up': case 'joystick_button_down': {
             var state = event.type === 'joystick_button_up' ? 0 : 1;
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-            HEAP8[(((ptr)+(4))>>0)]=event.index;
-            HEAP8[(((ptr)+(5))>>0)]=event.button;
-            HEAP8[(((ptr)+(6))>>0)]=state;
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+            HEAP8[(((ptr)+(4))>>0)] = event.index;
+            HEAP8[(((ptr)+(5))>>0)] = event.button;
+            HEAP8[(((ptr)+(6))>>0)] = state;
             break;
           }
           case 'joystick_axis_motion': {
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-            HEAP8[(((ptr)+(4))>>0)]=event.index;
-            HEAP8[(((ptr)+(5))>>0)]=event.axis;
-            HEAP32[(((ptr)+(8))>>2)]=SDL.joystickAxisValueConversion(event.value);
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+            HEAP8[(((ptr)+(4))>>0)] = event.index;
+            HEAP8[(((ptr)+(5))>>0)] = event.axis;
+            HEAP32[(((ptr)+(8))>>2)] = SDL.joystickAxisValueConversion(event.value);
             break;
           }
           case 'focus': {
             var SDL_WINDOWEVENT_FOCUS_GAINED = 12 /* SDL_WINDOWEVENT_FOCUS_GAINED */;
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-            HEAP32[(((ptr)+(4))>>2)]=0;
-            HEAP8[(((ptr)+(8))>>0)]=SDL_WINDOWEVENT_FOCUS_GAINED;
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+            HEAP32[(((ptr)+(4))>>2)] = 0;
+            HEAP8[(((ptr)+(8))>>0)] = SDL_WINDOWEVENT_FOCUS_GAINED;
             break;
           }
           case 'blur': {
             var SDL_WINDOWEVENT_FOCUS_LOST = 13 /* SDL_WINDOWEVENT_FOCUS_LOST */;
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-            HEAP32[(((ptr)+(4))>>2)]=0;
-            HEAP8[(((ptr)+(8))>>0)]=SDL_WINDOWEVENT_FOCUS_LOST;
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+            HEAP32[(((ptr)+(4))>>2)] = 0;
+            HEAP8[(((ptr)+(8))>>0)] = SDL_WINDOWEVENT_FOCUS_LOST;
             break;
           }
           case 'visibilitychange': {
             var SDL_WINDOWEVENT_SHOWN  = 1 /* SDL_WINDOWEVENT_SHOWN */;
             var SDL_WINDOWEVENT_HIDDEN = 2 /* SDL_WINDOWEVENT_HIDDEN */;
             var visibilityEventID = event.visible ? SDL_WINDOWEVENT_SHOWN : SDL_WINDOWEVENT_HIDDEN;
-            HEAP32[((ptr)>>2)]=SDL.DOMEventToSDLEvent[event.type];
-            HEAP32[(((ptr)+(4))>>2)]=0;
-            HEAP8[(((ptr)+(8))>>0)]=visibilityEventID;
+            HEAP32[((ptr)>>2)] = SDL.DOMEventToSDLEvent[event.type];
+            HEAP32[(((ptr)+(4))>>2)] = 0;
+            HEAP8[(((ptr)+(8))>>0)] = visibilityEventID;
             break;
           }
           default: throw 'Unhandled SDL event: ' + event.type;
@@ -5846,8 +5759,8 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
     }
 
   function _SDL_GetMouseState(x, y) {
-      if (x) HEAP32[((x)>>2)]=Browser.mouseX;
-      if (y) HEAP32[((y)>>2)]=Browser.mouseY;
+      if (x) HEAP32[((x)>>2)] = Browser.mouseX;
+      if (y) HEAP32[((y)>>2)] = Browser.mouseY;
       return SDL.buttonState;
     }
 
@@ -6047,41 +5960,13 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         GLctx.disjointTimerQueryExt = GLctx.getExtension("EXT_disjoint_timer_query");
         __webgl_enable_WEBGL_multi_draw(GLctx);
   
-        // These are the 'safe' feature-enabling extensions that don't add any performance impact related to e.g. debugging, and
-        // should be enabled by default so that client GLES2/GL code will not need to go through extra hoops to get its stuff working.
-        // As new extensions are ratified at http://www.khronos.org/registry/webgl/extensions/ , feel free to add your new extensions
-        // here, as long as they don't produce a performance impact for users that might not be using those extensions.
-        // E.g. debugging-related extensions should probably be off by default.
-        var automaticallyEnabledExtensions = [ // Khronos ratified WebGL extensions ordered by number (no debug extensions):
-                                               "OES_texture_float", "OES_texture_half_float", "OES_standard_derivatives",
-                                               "OES_vertex_array_object", "WEBGL_compressed_texture_s3tc", "WEBGL_depth_texture",
-                                               "OES_element_index_uint", "EXT_texture_filter_anisotropic", "EXT_frag_depth",
-                                               "WEBGL_draw_buffers", "ANGLE_instanced_arrays", "OES_texture_float_linear",
-                                               "OES_texture_half_float_linear", "EXT_blend_minmax", "EXT_shader_texture_lod",
-                                               "EXT_texture_norm16",
-                                               // Community approved WebGL extensions ordered by number:
-                                               "WEBGL_compressed_texture_pvrtc", "EXT_color_buffer_half_float", "WEBGL_color_buffer_float",
-                                               "EXT_sRGB", "WEBGL_compressed_texture_etc1", "EXT_disjoint_timer_query",
-                                               "WEBGL_compressed_texture_etc", "WEBGL_compressed_texture_astc", "EXT_color_buffer_float",
-                                               "WEBGL_compressed_texture_s3tc_srgb", "EXT_disjoint_timer_query_webgl2",
-                                               // Old style prefixed forms of extensions (but still currently used on e.g. iPhone Xs as
-                                               // tested on iOS 12.4.1):
-                                               "WEBKIT_WEBGL_compressed_texture_pvrtc"];
-  
-        function shouldEnableAutomatically(extension) {
-          var ret = false;
-          automaticallyEnabledExtensions.forEach(function(include) {
-            if (extension.indexOf(include) != -1) {
-              ret = true;
-            }
-          });
-          return ret;
-        }
-  
-        var exts = GLctx.getSupportedExtensions() || []; // .getSupportedExtensions() can return null if context is lost, so coerce to empty array.
+        // .getSupportedExtensions() can return null if context is lost, so coerce to empty array.
+        var exts = GLctx.getSupportedExtensions() || [];
         exts.forEach(function(ext) {
-          if (automaticallyEnabledExtensions.indexOf(ext) != -1) {
-            GLctx.getExtension(ext); // Calling .getExtension enables that extension permanently, no need to store the return value to be enabled.
+          // WEBGL_lose_context, WEBGL_debug_renderer_info and WEBGL_debug_shaders are not enabled by default.
+          if (ext.indexOf('lose_context') < 0 && ext.indexOf('debug') < 0) {
+            // Call .getExtension() to enable that extension permanently.
+            GLctx.getExtension(ext);
           }
         });
       },populateUniformTable:function(program) {
@@ -6197,7 +6082,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       this.ptr = excPtr - ExceptionInfoAttrs.SIZE;
   
       this.set_type = function(type) {
-        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.TYPE_OFFSET))>>2)]=type;
+        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.TYPE_OFFSET))>>2)] = type;
       };
   
       this.get_type = function() {
@@ -6205,7 +6090,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       };
   
       this.set_destructor = function(destructor) {
-        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.DESTRUCTOR_OFFSET))>>2)]=destructor;
+        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.DESTRUCTOR_OFFSET))>>2)] = destructor;
       };
   
       this.get_destructor = function() {
@@ -6213,12 +6098,12 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       };
   
       this.set_refcount = function(refcount) {
-        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.REFCOUNT_OFFSET))>>2)]=refcount;
+        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.REFCOUNT_OFFSET))>>2)] = refcount;
       };
   
       this.set_caught = function (caught) {
         caught = caught ? 1 : 0;
-        HEAP8[(((this.ptr)+(ExceptionInfoAttrs.CAUGHT_OFFSET))>>0)]=caught;
+        HEAP8[(((this.ptr)+(ExceptionInfoAttrs.CAUGHT_OFFSET))>>0)] = caught;
       };
   
       this.get_caught = function () {
@@ -6227,7 +6112,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
   
       this.set_rethrown = function (rethrown) {
         rethrown = rethrown ? 1 : 0;
-        HEAP8[(((this.ptr)+(ExceptionInfoAttrs.RETHROWN_OFFSET))>>0)]=rethrown;
+        HEAP8[(((this.ptr)+(ExceptionInfoAttrs.RETHROWN_OFFSET))>>0)] = rethrown;
       };
   
       this.get_rethrown = function () {
@@ -6245,49 +6130,49 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
   
       this.add_ref = function() {
         var value = HEAP32[(((this.ptr)+(ExceptionInfoAttrs.REFCOUNT_OFFSET))>>2)];
-        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.REFCOUNT_OFFSET))>>2)]=value + 1;
+        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.REFCOUNT_OFFSET))>>2)] = value + 1;
       };
   
       // Returns true if last reference released.
       this.release_ref = function() {
         var prev = HEAP32[(((this.ptr)+(ExceptionInfoAttrs.REFCOUNT_OFFSET))>>2)];
-        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.REFCOUNT_OFFSET))>>2)]=prev - 1;
+        HEAP32[(((this.ptr)+(ExceptionInfoAttrs.REFCOUNT_OFFSET))>>2)] = prev - 1;
         return prev === 1;
       };
     }
   
   var exceptionLast=0;
   
-  function __ZSt18uncaught_exceptionv() { // std::uncaught_exception()
-      return __ZSt18uncaught_exceptionv.uncaught_exceptions > 0;
-    }
+  var uncaughtExceptionCount=0;
   function ___cxa_throw(ptr, type, destructor) {
       var info = new ExceptionInfo(ptr);
       // Initialize ExceptionInfo content after it was allocated in __cxa_allocate_exception.
       info.init(type, destructor);
       exceptionLast = ptr;
-      if (!("uncaught_exception" in __ZSt18uncaught_exceptionv)) {
-        __ZSt18uncaught_exceptionv.uncaught_exceptions = 1;
-      } else {
-        __ZSt18uncaught_exceptionv.uncaught_exceptions++;
-      }
+      uncaughtExceptionCount++;
       throw ptr;
     }
 
-  var SYSCALLS={mappings:{},DEFAULT_POLLMASK:5,umask:511,calculateAt:function(dirfd, path) {
-        if (path[0] !== '/') {
-          // relative path
-          var dir;
-          if (dirfd === -100) {
-            dir = FS.cwd();
-          } else {
-            var dirstream = FS.getStream(dirfd);
-            if (!dirstream) throw new FS.ErrnoError(8);
-            dir = dirstream.path;
-          }
-          path = PATH.join2(dir, path);
+  var SYSCALLS={mappings:{},DEFAULT_POLLMASK:5,umask:511,calculateAt:function(dirfd, path, allowEmpty) {
+        if (path[0] === '/') {
+          return path;
         }
-        return path;
+        // relative path
+        var dir;
+        if (dirfd === -100) {
+          dir = FS.cwd();
+        } else {
+          var dirstream = FS.getStream(dirfd);
+          if (!dirstream) throw new FS.ErrnoError(8);
+          dir = dirstream.path;
+        }
+        if (path.length == 0) {
+          if (!allowEmpty) {
+            throw new FS.ErrnoError(44);;
+          }
+          return dir;
+        }
+        return PATH.join2(dir, path);
       },doStat:function(func, path, buf) {
         try {
           var stat = func(path);
@@ -6298,25 +6183,25 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           }
           throw e;
         }
-        HEAP32[((buf)>>2)]=stat.dev;
-        HEAP32[(((buf)+(4))>>2)]=0;
-        HEAP32[(((buf)+(8))>>2)]=stat.ino;
-        HEAP32[(((buf)+(12))>>2)]=stat.mode;
-        HEAP32[(((buf)+(16))>>2)]=stat.nlink;
-        HEAP32[(((buf)+(20))>>2)]=stat.uid;
-        HEAP32[(((buf)+(24))>>2)]=stat.gid;
-        HEAP32[(((buf)+(28))>>2)]=stat.rdev;
-        HEAP32[(((buf)+(32))>>2)]=0;
-        (tempI64 = [stat.size>>>0,(tempDouble=stat.size,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[(((buf)+(40))>>2)]=tempI64[0],HEAP32[(((buf)+(44))>>2)]=tempI64[1]);
-        HEAP32[(((buf)+(48))>>2)]=4096;
-        HEAP32[(((buf)+(52))>>2)]=stat.blocks;
-        HEAP32[(((buf)+(56))>>2)]=(stat.atime.getTime() / 1000)|0;
-        HEAP32[(((buf)+(60))>>2)]=0;
-        HEAP32[(((buf)+(64))>>2)]=(stat.mtime.getTime() / 1000)|0;
-        HEAP32[(((buf)+(68))>>2)]=0;
-        HEAP32[(((buf)+(72))>>2)]=(stat.ctime.getTime() / 1000)|0;
-        HEAP32[(((buf)+(76))>>2)]=0;
-        (tempI64 = [stat.ino>>>0,(tempDouble=stat.ino,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[(((buf)+(80))>>2)]=tempI64[0],HEAP32[(((buf)+(84))>>2)]=tempI64[1]);
+        HEAP32[((buf)>>2)] = stat.dev;
+        HEAP32[(((buf)+(4))>>2)] = 0;
+        HEAP32[(((buf)+(8))>>2)] = stat.ino;
+        HEAP32[(((buf)+(12))>>2)] = stat.mode;
+        HEAP32[(((buf)+(16))>>2)] = stat.nlink;
+        HEAP32[(((buf)+(20))>>2)] = stat.uid;
+        HEAP32[(((buf)+(24))>>2)] = stat.gid;
+        HEAP32[(((buf)+(28))>>2)] = stat.rdev;
+        HEAP32[(((buf)+(32))>>2)] = 0;
+        (tempI64 = [stat.size>>>0,(tempDouble=stat.size,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[(((buf)+(40))>>2)] = tempI64[0],HEAP32[(((buf)+(44))>>2)] = tempI64[1]);
+        HEAP32[(((buf)+(48))>>2)] = 4096;
+        HEAP32[(((buf)+(52))>>2)] = stat.blocks;
+        HEAP32[(((buf)+(56))>>2)] = (stat.atime.getTime() / 1000)|0;
+        HEAP32[(((buf)+(60))>>2)] = 0;
+        HEAP32[(((buf)+(64))>>2)] = (stat.mtime.getTime() / 1000)|0;
+        HEAP32[(((buf)+(68))>>2)] = 0;
+        HEAP32[(((buf)+(72))>>2)] = (stat.ctime.getTime() / 1000)|0;
+        HEAP32[(((buf)+(76))>>2)] = 0;
+        (tempI64 = [stat.ino>>>0,(tempDouble=stat.ino,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[(((buf)+(80))>>2)] = tempI64[0],HEAP32[(((buf)+(84))>>2)] = tempI64[1]);
         return 0;
       },doMsync:function(addr, stream, len, flags, offset) {
         var buffer = HEAPU8.slice(addr, addr + len);
@@ -6421,6 +6306,10 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
   }
   }
 
+  function setErrNo(value) {
+      HEAP32[((___errno_location())>>2)] = value;
+      return value;
+    }
   function ___sys_fcntl64(fd, cmd, varargs) {SYSCALLS.varargs = varargs;
   try {
   
@@ -6451,7 +6340,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
           var arg = SYSCALLS.get();
           var offset = 0;
           // We're always unlocked.
-          HEAP16[(((arg)+(offset))>>1)]=2;
+          HEAP16[(((arg)+(offset))>>1)] = 2;
           return 0;
         }
         case 13:
@@ -6500,7 +6389,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         case 21519: {
           if (!stream.tty) return -59;
           var argp = SYSCALLS.get();
-          HEAP32[((argp)>>2)]=0;
+          HEAP32[((argp)>>2)] = 0;
           return 0;
         }
         case 21520: {
@@ -6536,7 +6425,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
   try {
   
       var pathname = SYSCALLS.getStr(path);
-      var mode = SYSCALLS.get();
+      var mode = varargs ? SYSCALLS.get() : 0;
       var stream = FS.open(pathname, flags, mode);
       return stream.fd;
     } catch (e) {
@@ -6561,8 +6450,8 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         setErrNo(28);
         return -1;
       }
-      HEAP32[((tp)>>2)]=(now/1000)|0; // seconds
-      HEAP32[(((tp)+(4))>>2)]=((now % 1000)*1000*1000)|0; // nanoseconds
+      HEAP32[((tp)>>2)] = (now/1000)|0; // seconds
+      HEAP32[(((tp)+(4))>>2)] = ((now % 1000)*1000*1000)|0; // nanoseconds
       return 0;
     }
 
@@ -6699,24 +6588,24 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
   function _emscripten_get_canvas_element_size(target, width, height) {
       var canvas = findCanvasEventTarget(target);
       if (!canvas) return -4;
-      HEAP32[((width)>>2)]=canvas.width;
-      HEAP32[((height)>>2)]=canvas.height;
+      HEAP32[((width)>>2)] = canvas.width;
+      HEAP32[((height)>>2)] = canvas.height;
     }
 
   function _emscripten_get_device_pixel_ratio() {
       return (typeof devicePixelRatio === 'number' && devicePixelRatio) || 1.0;
     }
 
-  function __getBoundingClientRect(e) {
+  function getBoundingClientRect(e) {
       return specialHTMLTargets.indexOf(e) < 0 ? e.getBoundingClientRect() : {'left':0,'top':0};
     }
   function _emscripten_get_element_css_size(target, width, height) {
       target = findEventTarget(target);
       if (!target) return -4;
   
-      var rect = __getBoundingClientRect(target);
-      HEAPF64[((width)>>3)]=rect.width;
-      HEAPF64[((height)>>3)]=rect.height;
+      var rect = getBoundingClientRect(target);
+      HEAPF64[((width)>>3)] = rect.width;
+      HEAPF64[((height)>>3)] = rect.height;
   
       return 0;
     }
@@ -6733,7 +6622,6 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       abort('OOM');
     }
   function _emscripten_resize_heap(requestedSize) {
-      requestedSize = requestedSize >>> 0;
       abortOnCannotGrowMemory(requestedSize);
     }
 
@@ -6746,7 +6634,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
     }
 
   function _emscripten_set_main_loop_arg(func, arg, fps, simulateInfiniteLoop) {
-      var browserIterationFunc = function() { getDynCaller("vi", func)(arg); };
+      var browserIterationFunc = function() { (function(a1) {  dynCall_vi.apply(null, [func, a1]); })(arg); };
       setMainLoop(browserIterationFunc, fps, simulateInfiniteLoop, arg);
     }
 
@@ -6781,27 +6669,37 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       }
       return getEnvStrings.strings;
     }
-  function _environ_get(__environ, environ_buf) {
+  function _environ_get(__environ, environ_buf) {try {
+  
       var bufSize = 0;
       getEnvStrings().forEach(function(string, i) {
         var ptr = environ_buf + bufSize;
-        HEAP32[(((__environ)+(i * 4))>>2)]=ptr;
+        HEAP32[(((__environ)+(i * 4))>>2)] = ptr;
         writeAsciiToMemory(string, ptr);
         bufSize += string.length + 1;
       });
       return 0;
-    }
+    } catch (e) {
+    if (typeof FS === 'undefined' || !(e instanceof FS.ErrnoError)) abort(e);
+    return e.errno;
+  }
+  }
 
-  function _environ_sizes_get(penviron_count, penviron_buf_size) {
+  function _environ_sizes_get(penviron_count, penviron_buf_size) {try {
+  
       var strings = getEnvStrings();
-      HEAP32[((penviron_count)>>2)]=strings.length;
+      HEAP32[((penviron_count)>>2)] = strings.length;
       var bufSize = 0;
       strings.forEach(function(string) {
         bufSize += string.length + 1;
       });
-      HEAP32[((penviron_buf_size)>>2)]=bufSize;
+      HEAP32[((penviron_buf_size)>>2)] = bufSize;
       return 0;
-    }
+    } catch (e) {
+    if (typeof FS === 'undefined' || !(e instanceof FS.ErrnoError)) abort(e);
+    return e.errno;
+  }
+  }
 
   function _exit(status) {
       // void _exit(int status);
@@ -6824,7 +6722,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
   
       var stream = SYSCALLS.getStreamFromFD(fd);
       var num = SYSCALLS.doReadv(stream, iov, iovcnt);
-      HEAP32[((pnum)>>2)]=num
+      HEAP32[((pnum)>>2)] = num
       return 0;
     } catch (e) {
     if (typeof FS === 'undefined' || !(e instanceof FS.ErrnoError)) abort(e);
@@ -6847,7 +6745,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       }
   
       FS.llseek(stream, offset, whence);
-      (tempI64 = [stream.position>>>0,(tempDouble=stream.position,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[((newOffset)>>2)]=tempI64[0],HEAP32[(((newOffset)+(4))>>2)]=tempI64[1]);
+      (tempI64 = [stream.position>>>0,(tempDouble=stream.position,(+(Math.abs(tempDouble))) >= 1.0 ? (tempDouble > 0.0 ? ((Math.min((+(Math.floor((tempDouble)/4294967296.0))), 4294967295.0))|0)>>>0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble)))>>>0))/4294967296.0)))))>>>0) : 0)],HEAP32[((newOffset)>>2)] = tempI64[0],HEAP32[(((newOffset)+(4))>>2)] = tempI64[1]);
       if (stream.getdents && offset === 0 && whence === 0) stream.getdents = null; // reset readdir state
       return 0;
     } catch (e) {
@@ -6860,7 +6758,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
   
       var stream = SYSCALLS.getStreamFromFD(fd);
       var num = SYSCALLS.doWritev(stream, iov, iovcnt);
-      HEAP32[((pnum)>>2)]=num
+      HEAP32[((pnum)>>2)] = num
       return 0;
     } catch (e) {
     if (typeof FS === 'undefined' || !(e instanceof FS.ErrnoError)) abort(e);
@@ -6994,7 +6892,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
         return;
       }
-      GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, data ? HEAPU8.subarray((data),(data+imageSize)) : null);
+      GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, data ? HEAPU8.subarray((data), (data+imageSize)) : null);
     }
 
   function _glCompressedTexSubImage3D(target, level, xoffset, yoffset, zoffset, width, height, depth, format, imageSize, data) {
@@ -7172,7 +7070,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         } else {
           GL.recordError(0x502 /* GL_INVALID_OPERATION */);
         }
-        HEAP32[(((buffers)+(i*4))>>2)]=id;
+        HEAP32[(((buffers)+(i*4))>>2)] = id;
       }
     }
   function _glGenBuffers(n, buffers) {
@@ -7219,7 +7117,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         GL.recordError(0x501 /* GL_INVALID_VALUE */);
         return;
       }
-      HEAP32[((data)>>2)]=GLctx.getBufferParameter(target, value);
+      HEAP32[((data)>>2)] = GLctx.getBufferParameter(target, value);
     }
 
   function _glGetError() {
@@ -7330,9 +7228,9 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
                        result instanceof Array) {
               for (var i = 0; i < result.length; ++i) {
                 switch (type) {
-                  case 0: HEAP32[(((p)+(i*4))>>2)]=result[i]; break;
-                  case 2: HEAPF32[(((p)+(i*4))>>2)]=result[i]; break;
-                  case 4: HEAP8[(((p)+(i))>>0)]=result[i] ? 1 : 0; break;
+                  case 0: HEAP32[(((p)+(i*4))>>2)] = result[i]; break;
+                  case 2: HEAPF32[(((p)+(i*4))>>2)] = result[i]; break;
+                  case 4: HEAP8[(((p)+(i))>>0)] = result[i] ? 1 : 0; break;
                 }
               }
               return;
@@ -7355,9 +7253,9 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
   
       switch (type) {
         case 1: writeI53ToI64(p, ret); break;
-        case 0: HEAP32[((p)>>2)]=ret; break;
-        case 2:   HEAPF32[((p)>>2)]=ret; break;
-        case 4: HEAP8[((p)>>0)]=ret ? 1 : 0; break;
+        case 0: HEAP32[((p)>>2)] = ret; break;
+        case 2:   HEAPF32[((p)>>2)] = ret; break;
+        case 4: HEAP8[((p)>>0)] = ret ? 1 : 0; break;
       }
     }
   function _glGetFloatv(name_, p) {
@@ -7372,7 +7270,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       var log = GLctx.getProgramInfoLog(GL.programs[program]);
       if (log === null) log = '(unknown error)';
       var numBytesWrittenExclNull = (maxLength > 0 && infoLog) ? stringToUTF8(log, infoLog, maxLength) : 0;
-      if (length) HEAP32[((length)>>2)]=numBytesWrittenExclNull;
+      if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
     }
 
   function _glGetProgramiv(program, pname, p) {
@@ -7397,9 +7295,9 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       if (pname == 0x8B84) { // GL_INFO_LOG_LENGTH
         var log = GLctx.getProgramInfoLog(GL.programs[program]);
         if (log === null) log = '(unknown error)';
-        HEAP32[((p)>>2)]=log.length + 1;
+        HEAP32[((p)>>2)] = log.length + 1;
       } else if (pname == 0x8B87 /* GL_ACTIVE_UNIFORM_MAX_LENGTH */) {
-        HEAP32[((p)>>2)]=ptable.maxUniformLength;
+        HEAP32[((p)>>2)] = ptable.maxUniformLength;
       } else if (pname == 0x8B8A /* GL_ACTIVE_ATTRIBUTE_MAX_LENGTH */) {
         if (ptable.maxAttributeLength == -1) {
           program = GL.programs[program];
@@ -7410,7 +7308,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
             ptable.maxAttributeLength = Math.max(ptable.maxAttributeLength, activeAttrib.name.length+1);
           }
         }
-        HEAP32[((p)>>2)]=ptable.maxAttributeLength;
+        HEAP32[((p)>>2)] = ptable.maxAttributeLength;
       } else if (pname == 0x8A35 /* GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH */) {
         if (ptable.maxUniformBlockNameLength == -1) {
           program = GL.programs[program];
@@ -7421,9 +7319,9 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
             ptable.maxUniformBlockNameLength = Math.max(ptable.maxUniformBlockNameLength, activeBlockName.length+1);
           }
         }
-        HEAP32[((p)>>2)]=ptable.maxUniformBlockNameLength;
+        HEAP32[((p)>>2)] = ptable.maxUniformBlockNameLength;
       } else {
-        HEAP32[((p)>>2)]=GLctx.getProgramParameter(GL.programs[program], pname);
+        HEAP32[((p)>>2)] = GLctx.getProgramParameter(GL.programs[program], pname);
       }
     }
 
@@ -7431,7 +7329,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
       var log = GLctx.getShaderInfoLog(GL.shaders[shader]);
       if (log === null) log = '(unknown error)';
       var numBytesWrittenExclNull = (maxLength > 0 && infoLog) ? stringToUTF8(log, infoLog, maxLength) : 0;
-      if (length) HEAP32[((length)>>2)]=numBytesWrittenExclNull;
+      if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
     }
 
   function _glGetShaderiv(shader, pname, p) {
@@ -7449,15 +7347,15 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         // (An empty string is falsey, so we can just check that instead of
         // looking at log.length.)
         var logLength = log ? log.length + 1 : 0;
-        HEAP32[((p)>>2)]=logLength;
+        HEAP32[((p)>>2)] = logLength;
       } else if (pname == 0x8B88) { // GL_SHADER_SOURCE_LENGTH
         var source = GLctx.getShaderSource(GL.shaders[shader]);
         // source may be a null, or the empty string, both of which are falsey
         // values that we report a 0 length for.
         var sourceLength = source ? source.length + 1 : 0;
-        HEAP32[((p)>>2)]=sourceLength;
+        HEAP32[((p)>>2)] = sourceLength;
       } else {
-        HEAP32[((p)>>2)]=GLctx.getShaderParameter(GL.shaders[shader], pname);
+        HEAP32[((p)>>2)] = GLctx.getShaderParameter(GL.shaders[shader], pname);
       }
     }
 
@@ -7804,7 +7702,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAPF32.subarray((value)>>2,(value+count*4)>>2);
+        var view = HEAPF32.subarray((value)>>2, (value+count*4)>>2);
       }
       GLctx.uniform1fv(GL.uniforms[location], view);
     }
@@ -7825,7 +7723,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAP32.subarray((value)>>2,(value+count*4)>>2);
+        var view = HEAP32.subarray((value)>>2, (value+count*4)>>2);
       }
       GLctx.uniform1iv(GL.uniforms[location], view);
     }
@@ -7850,7 +7748,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAPF32.subarray((value)>>2,(value+count*8)>>2);
+        var view = HEAPF32.subarray((value)>>2, (value+count*8)>>2);
       }
       GLctx.uniform2fv(GL.uniforms[location], view);
     }
@@ -7871,7 +7769,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAP32.subarray((value)>>2,(value+count*8)>>2);
+        var view = HEAP32.subarray((value)>>2, (value+count*8)>>2);
       }
       GLctx.uniform2iv(GL.uniforms[location], view);
     }
@@ -7897,7 +7795,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAPF32.subarray((value)>>2,(value+count*12)>>2);
+        var view = HEAPF32.subarray((value)>>2, (value+count*12)>>2);
       }
       GLctx.uniform3fv(GL.uniforms[location], view);
     }
@@ -7919,7 +7817,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAP32.subarray((value)>>2,(value+count*12)>>2);
+        var view = HEAP32.subarray((value)>>2, (value+count*12)>>2);
       }
       GLctx.uniform3iv(GL.uniforms[location], view);
     }
@@ -7950,7 +7848,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAPF32.subarray((value)>>2,(value+count*16)>>2);
+        var view = HEAPF32.subarray((value)>>2, (value+count*16)>>2);
       }
       GLctx.uniform4fv(GL.uniforms[location], view);
     }
@@ -7973,7 +7871,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAP32.subarray((value)>>2,(value+count*16)>>2);
+        var view = HEAP32.subarray((value)>>2, (value+count*16)>>2);
       }
       GLctx.uniform4iv(GL.uniforms[location], view);
     }
@@ -8006,7 +7904,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAPF32.subarray((value)>>2,(value+count*16)>>2);
+        var view = HEAPF32.subarray((value)>>2, (value+count*16)>>2);
       }
       GLctx.uniformMatrix2fv(GL.uniforms[location], !!transpose, view);
     }
@@ -8042,7 +7940,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAPF32.subarray((value)>>2,(value+count*36)>>2);
+        var view = HEAPF32.subarray((value)>>2, (value+count*36)>>2);
       }
       GLctx.uniformMatrix3fv(GL.uniforms[location], !!transpose, view);
     }
@@ -8089,7 +7987,7 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         }
       } else
       {
-        var view = HEAPF32.subarray((value)>>2,(value+count*64)>>2);
+        var view = HEAPF32.subarray((value)>>2, (value+count*64)>>2);
       }
       GLctx.uniformMatrix4fv(GL.uniforms[location], !!transpose, view);
     }
@@ -8571,12 +8469,12 @@ function js_api_request(url,api_key){ return Asyncify.handleAsync(async () => { 
         Asyncify.setDataRewindFunc(ptr);
         return ptr;
       },setDataHeader:function(ptr, stack, stackSize) {
-        HEAP32[((ptr)>>2)]=stack;
-        HEAP32[(((ptr)+(4))>>2)]=stack + stackSize;
+        HEAP32[((ptr)>>2)] = stack;
+        HEAP32[(((ptr)+(4))>>2)] = stack + stackSize;
       },setDataRewindFunc:function(ptr) {
         var bottomOfCallStack = Asyncify.exportCallStack[0];
         var rewindId = Asyncify.getCallStackId(bottomOfCallStack);
-        HEAP32[(((ptr)+(8))>>2)]=rewindId;
+        HEAP32[(((ptr)+(8))>>2)] = rewindId;
       },getDataRewindFunc:function(ptr) {
         var id = HEAP32[(((ptr)+(8))>>2)];
         var name = Asyncify.callStackIdToName[id];
@@ -8752,8 +8650,6 @@ function intArrayToString(array) {
 }
 
 
-
-__ATINIT__.push({ func: function() { ___wasm_call_ctors() } });
 var asmLibraryArg = {
   "SDL_Flip": _SDL_Flip,
   "SDL_FreeSurface": _SDL_FreeSurface,
@@ -8910,7 +8806,6 @@ var asmLibraryArg = {
   "glVertexAttribPointer": _glVertexAttribPointer,
   "glViewport": _glViewport,
   "js_api_request": js_api_request,
-  "memory": wasmMemory,
   "setTempRet0": _setTempRet0,
   "strftime_l": _strftime_l
 };
@@ -8956,6 +8851,11 @@ var _malloc = Module["_malloc"] = function() {
 };
 
 /** @type {function(...*):?} */
+var _emscripten_main_thread_process_queued_calls = Module["_emscripten_main_thread_process_queued_calls"] = function() {
+  return (_emscripten_main_thread_process_queued_calls = Module["_emscripten_main_thread_process_queued_calls"] = Module["asm"]["emscripten_main_thread_process_queued_calls"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
 var stackSave = Module["stackSave"] = function() {
   return (stackSave = Module["stackSave"] = Module["asm"]["stackSave"]).apply(null, arguments);
 };
@@ -8968,6 +8868,21 @@ var stackRestore = Module["stackRestore"] = function() {
 /** @type {function(...*):?} */
 var stackAlloc = Module["stackAlloc"] = function() {
   return (stackAlloc = Module["stackAlloc"] = Module["asm"]["stackAlloc"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
+var _emscripten_stack_set_limits = Module["_emscripten_stack_set_limits"] = function() {
+  return (_emscripten_stack_set_limits = Module["_emscripten_stack_set_limits"] = Module["asm"]["emscripten_stack_set_limits"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
+var _emscripten_stack_get_base = Module["_emscripten_stack_get_base"] = function() {
+  return (_emscripten_stack_get_base = Module["_emscripten_stack_get_base"] = Module["asm"]["emscripten_stack_get_base"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
+var _emscripten_stack_get_end = Module["_emscripten_stack_get_end"] = function() {
+  return (_emscripten_stack_get_end = Module["_emscripten_stack_get_end"] = Module["asm"]["emscripten_stack_get_end"]).apply(null, arguments);
 };
 
 /** @type {function(...*):?} */
@@ -9066,13 +8981,28 @@ var dynCall_viiiiiiiii = Module["dynCall_viiiiiiiii"] = function() {
 };
 
 /** @type {function(...*):?} */
-var dynCall_jiji = Module["dynCall_jiji"] = function() {
-  return (dynCall_jiji = Module["dynCall_jiji"] = Module["asm"]["dynCall_jiji"]).apply(null, arguments);
+var dynCall_iiiji = Module["dynCall_iiiji"] = function() {
+  return (dynCall_iiiji = Module["dynCall_iiiji"] = Module["asm"]["dynCall_iiiji"]).apply(null, arguments);
 };
 
 /** @type {function(...*):?} */
-var dynCall_iidiiii = Module["dynCall_iidiiii"] = function() {
-  return (dynCall_iidiiii = Module["dynCall_iidiiii"] = Module["asm"]["dynCall_iidiiii"]).apply(null, arguments);
+var dynCall_iiiij = Module["dynCall_iiiij"] = function() {
+  return (dynCall_iiiij = Module["dynCall_iiiij"] = Module["asm"]["dynCall_iiiij"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
+var dynCall_iiiiiiiiii = Module["dynCall_iiiiiiiiii"] = function() {
+  return (dynCall_iiiiiiiiii = Module["dynCall_iiiiiiiiii"] = Module["asm"]["dynCall_iiiiiiiiii"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
+var dynCall_ij = Module["dynCall_ij"] = function() {
+  return (dynCall_ij = Module["dynCall_ij"] = Module["asm"]["dynCall_ij"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
+var dynCall_ji = Module["dynCall_ji"] = function() {
+  return (dynCall_ji = Module["dynCall_ji"] = Module["asm"]["dynCall_ji"]).apply(null, arguments);
 };
 
 /** @type {function(...*):?} */
@@ -9083,6 +9013,21 @@ var dynCall_iiiii = Module["dynCall_iiiii"] = function() {
 /** @type {function(...*):?} */
 var dynCall_iiiiii = Module["dynCall_iiiiii"] = function() {
   return (dynCall_iiiiii = Module["dynCall_iiiiii"] = Module["asm"]["dynCall_iiiiii"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
+var dynCall_vij = Module["dynCall_vij"] = function() {
+  return (dynCall_vij = Module["dynCall_vij"] = Module["asm"]["dynCall_vij"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
+var dynCall_jiji = Module["dynCall_jiji"] = function() {
+  return (dynCall_jiji = Module["dynCall_jiji"] = Module["asm"]["dynCall_jiji"]).apply(null, arguments);
+};
+
+/** @type {function(...*):?} */
+var dynCall_iidiiii = Module["dynCall_iidiiii"] = function() {
+  return (dynCall_iidiiii = Module["dynCall_iidiiii"] = Module["asm"]["dynCall_iidiiii"]).apply(null, arguments);
 };
 
 /** @type {function(...*):?} */
@@ -9186,12 +9131,12 @@ function callMain(args) {
 
     var ret = entryFunction(argc, argv);
 
-    // In PROXY_TO_PTHREAD builds, we should never exit the runtime below, as execution is asynchronously handed
-    // off to a pthread.
+    // In PROXY_TO_PTHREAD builds, we should never exit the runtime below, as
+    // execution is asynchronously handed off to a pthread.
     // if we are saving the stack, then do not call exit, we are not
     // really exiting now, just unwinding the JS stack
     if (!noExitRuntime) {
-    // if we're not running an evented main loop, it's time to exit
+      // if we're not running an evented main loop, it's time to exit
       exit(ret, /* implicit = */ true);
     }
   }
@@ -9228,7 +9173,10 @@ function run(args) {
 
   preRun();
 
-  if (runDependencies > 0) return; // a preRun added a dependency, run will be called later
+  // a preRun added a dependency, run will be called later
+  if (runDependencies > 0) {
+    return;
+  }
 
   function doRun() {
     // run may have just been called through dependencies being fulfilled just in this very frame,
@@ -9302,8 +9250,6 @@ if (Module['preInit']) {
 var shouldRunNow = true;
 
 if (Module['noInitialRun']) shouldRunNow = false;
-
-  noExitRuntime = true;
 
 run();
 
